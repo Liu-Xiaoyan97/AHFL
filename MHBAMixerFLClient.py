@@ -20,15 +20,19 @@ import flwr as fl
 
 
 class MHBAMixerClient(NumPyClient): # 创建 MHBAMixer 模型的客户端
-    def __init__(self, mixers,):
+    def __init__(self, mixers, model_name):
         super(MHBAMixerClient, self).__init__()  # 调用了父类 NumPyClient 的构造函数，确保正确地初始化父类
         self.mixers = mixers
+        self.model_name = model_name
 
     def get_parameters(self, config):
         return _get_parameters(self.mixers)
 
     def set_parameters(self, parameters: List[np.ndarray]):
-        _set_parameters(self.mixers, parameters)
+        if self.model_name == "MHBAMixer":
+            _set_parameters(self.mixers, parameters[:37])
+        if self.model_name == "DWTMixer":
+            _set_parameters(self.mixers, parameters[37:])
 
     def fit(self, parameters, config):
         cola_config = {
@@ -85,6 +89,7 @@ def _get_parameters(model):
 
 
 def _set_parameters(model, parameters):
+    # print(len(model.state_dict().keys()), model.state_dict().keys(), len(parameters))
     params_dict = zip(model.state_dict().keys(), parameters)
     state_dict = {}
     for k, v in params_dict:
@@ -118,7 +123,7 @@ def main() -> None:
     """
     model = MHBAMixerModule(**model_config)
     # Flower client
-    client = MHBAMixerClient(model)
+    client = MHBAMixerClient(model, model_name=args.mixer)
     fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=client)
 
 if __name__ == "__main__":
