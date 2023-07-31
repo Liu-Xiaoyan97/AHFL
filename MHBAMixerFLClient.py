@@ -30,9 +30,9 @@ class MHBAMixerClient(NumPyClient): # 创建 MHBAMixer 模型的客户端
 
     def set_parameters(self, parameters: List[np.ndarray]):
         if self.model_name == "MHBAMixer":
-            _set_parameters(self.mixers, parameters[:37])
+            _set_parameters(self.mixers, parameters[:39])
         if self.model_name == "DWTMixer":
-            _set_parameters(self.mixers, parameters[37:])
+            _set_parameters(self.mixers, parameters[39:])
 
     def fit(self, parameters, config):
         cola_config = {
@@ -50,7 +50,8 @@ class MHBAMixerClient(NumPyClient): # 创建 MHBAMixer 模型的客户端
         train_loader = DataLoader(HuggingFaceDatasetImpl(**cola_config, mode="train"), batch_size=64, shuffle=True)
         val_loader = DataLoader(HuggingFaceDatasetImpl(**cola_config, mode='validation'),batch_size=64)
         self.set_parameters(parameters)
-        trainer = lightning.Trainer(max_epochs=1, accelerator="auto", devices="auto")
+        # 每10轮融合一次指标和模型参数
+        trainer = lightning.Trainer(max_epochs=10, accelerator="auto", devices="auto")
         trainer.fit(self.mixers, train_loader, val_loader)
         return self.get_parameters(config={}), len(train_loader), {}
 
@@ -70,7 +71,7 @@ class MHBAMixerClient(NumPyClient): # 创建 MHBAMixer 模型的客户端
         test_loader = DataLoader(HuggingFaceDatasetImpl(**cola_config, mode='validation'), batch_size=64)
         self.set_parameters(parameters)
 
-        trainer = lightning.Trainer(accelerator="auto", devices="auto")
+        trainer = lightning.Trainer(accelerator="auto", devices="auto", log_every_n_steps=1)
         results = trainer.test(self.mixers, test_loader)
         test_epoch_accuracy = results[0]['test_epoch_accuracy']
         test_epoch_f1score = results[0]['test_epoch_f1score']
@@ -89,13 +90,10 @@ def _get_parameters(model):
 
 
 def _set_parameters(model, parameters):
-    # print(len(model.state_dict().keys()), model.state_dict().keys(), len(parameters))
     params_dict = zip(model.state_dict().keys(), parameters)
     state_dict = {}
     for k, v in params_dict:
         state_dict[k] = torch.tensor(v)
-    # state_dict = OrderedDict[{k: torch.tensor(v) for k, v in params_dict}]
-    # state_dict = params_dict
     model.load_state_dict(state_dict, strict=True)
 
 

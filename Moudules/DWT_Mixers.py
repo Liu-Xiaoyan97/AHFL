@@ -24,14 +24,17 @@ class DWT_MIXER(nn.Module):
             MixerLayer(max_seq_len, hidden_dim, mlp_hidden_dim, mlp_hidden_dim) for _ in range(num_mixers)
         ])
         self.classification = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, num_classes),
             nn.Softmax(dim=-1)
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         inputs = self.embedding(inputs)
-        inputs = self.classification(self.mixers(inputs))
-        return inputs
+        outputs = self.mixers(inputs)
+        means = outputs.mean(dim=-1, keepdim=True).mean(1)
+        output = self.classification(outputs.mean(1) - means)
+        return output
 
 
 class MixerLayer(nn.Module):

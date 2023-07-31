@@ -2,6 +2,17 @@
 @Author W H Duan, X Y Liu, Y L Wang, H L Tang   
 @copyright (c) MiT 2023
 ## News
+### 2023/7/31 Version 0.4 Multi-Heterogeneous Clients supporting!  
+<font size="6" color="red">In this version, we settled the problem of loss value by revising the aggregate function.
+In Detail, the original aggregate function can not transfer parameters in order.</font>  
+*Now*, you run multi-heterogeneous clients (like two DWTMixer clients and one MHBAMixer client) as follows:  
+```shell
+python server.py --max_epoch MAX_EPOCH
+python MHBAMixerFLClient.py 
+python MHBAMixerFLClient --mixer DWTMixer
+python MHBAMixerFLClient --mixer DWTMixer
+```  
+In next step, we will make more datasets and networks supporting for this framework.
 ### 2023/7/24 Version 0.3 Heterogeneous Clients Supporting!  
 <font size="6" color="red">In this version, we had applied heterogeneous neural networks to FL successfully. </font>  
 Notice! If you haven't created your own conda environment, please read <font color="blue">How to use?</font> firstly.  
@@ -14,6 +25,7 @@ python MHBAMixerFLClient --mixer DWTMixer
 some deficiencies still exist.  
 - MHBAMixer and DWTMixer supporting only.  
 - Heterogeneous neural networks support for only single client.  
+- Loss didn't convergence.
 ### 2023/7/21 Version 0.2 Isomorphic Clients!
 <font size=6 color="red">We had applied the MHBAMixer 
 and the DWTMixer in FL with isomorphic clients.</font>  

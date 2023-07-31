@@ -141,6 +141,7 @@ class MHBAMixer(nn.Module):
                                   for i in range(num_mixers)]
         )
         self.classification = nn.Sequential(
+            nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, num_classes),
             nn.Softmax(dim=-1)
         )
@@ -149,7 +150,8 @@ class MHBAMixer(nn.Module):
         # features = torch.tensor(inputs["tokens"]["input_ids"]).long()
         outputs = self.embedding(inputs)
         outputs = self.mixers(outputs)
-        output = self.classification(outputs)
+        means = outputs.mean(dim=-1, keepdim=True).mean(1)
+        output = self.classification(outputs.mean(1)-means)
         return output
 
 
@@ -192,22 +194,22 @@ class MlpLayer(nn.Module):
         return self.layers(inputs)
 
 
-if __name__ == "__main__":
-    cola_config = {
-        "filename": "glue",
-        "subset": "cola",
-        "filepath": None,
-        "label_map": [0, 1],
-        "batch_size": 10,
-        "num_workers": 4,
-        "feature1": "sentence",
-        "feature2": None,
-        "label": "label",
-        "max_length": 128
-    }
-    test_loader = HuggingFaceDatasetImpl(**cola_config, mode='validation')
-    loader = DataLoader(test_loader, batch_size=2)
-    print(len(loader))
+# if __name__ == "__main__":
+#     cola_config = {
+#         "filename": "glue",
+#         "subset": "cola",
+#         "filepath": None,
+#         "label_map": [0, 1],
+#         "batch_size": 10,
+#         "num_workers": 4,
+#         "feature1": "sentence",
+#         "feature2": None,
+#         "label": "label",
+#         "max_length": 128
+#     }
+#     test_loader = HuggingFaceDatasetImpl(**cola_config, mode='validation')
+#     loader = DataLoader(test_loader, batch_size=2)
+#     print(len(loader))
 #     # print(test_loader.__getitem__(0))
 #     model_config = {
 #         "vocab_size": 30522,
