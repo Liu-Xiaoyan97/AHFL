@@ -7,6 +7,7 @@ import numpy as np
 from flwr.common import Metrics
 from typing import Callable, Union
 import operator
+from omegaconf import OmegaConf
 from flwr.common import (
     EvaluateIns,
     EvaluateRes,
@@ -24,29 +25,18 @@ from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy.aggregate import aggregate, weighted_loss_avg
 
 from Moudules.Lightning_MHBAMixer_Module import MHBAMixerModule
-num_model1, num_model2 = 2, 1
-model1_layers, model2_layers = 0, 0
-model_config = {
-    "vocab_size": 30522,
-    "index": 7,
-    "hidden_dim": 64,
-    "kernel_size": [5, 3, 3, 3, 3, 3, 3, 7],
-    "dilation": [1, 1, 1, 1, 1, 1, 1, 1],
-    "padding": [2, 1, 1, 1, 1, 1, 1, 3],
-    "n_heads": 2,
-    "num_mixers": 2,
-    "max_seq_len": 128,
-    "num_classes": 2
-}
 
-
+configs = OmegaConf.load("config.yml")
+dataset_conf, model_conf = configs.dataset, configs.model
+num_model1, num_model2, num_model3 = model_conf.num_models
+model1_layers, model2_layers, model3_layers = 0, 0, 0
 def _get_parameters(model):
     return [val.cpu().numpy() for _, val in model.state_dict().items()]
 
 def aggregate(results: List[Tuple[NDArrays, int]]) -> NDArrays:
     """Compute weighted average."""
     # Calculate the total number of examples used during training
-    results = itertools.groupby(results, key=lambda i: len(i[0]))
+    results = itertools.groupby(results, key=lambda i: i[0][0])
     weights_prime_list = {}
     for k, result in results:
         result = list(result)
@@ -60,16 +50,14 @@ def aggregate(results: List[Tuple[NDArrays, int]]) -> NDArrays:
             reduce(np.add, layer_updates) / num_examples_total
             for layer_updates in zip(*weighted_weights)
         ]
-        if len(weights_prime) == 39:
+        if weights_prime[0] == model_conf.model_flag[0]:
             weights_prime_list["model1"] = weights_prime
-        elif len(weights_prime) == 41:
+        elif weights_prime[0] == model_conf.model_flag[1]:
             weights_prime_list["model2"] = weights_prime
         else:
-            continue
+            weights_prime_list["model3"] = weights_prime
     weights_prime_list = list(weights_prime_list.values())
-    weights_prime_list = sorted(weights_prime_list, key= lambda i:len(i))
-    for i, weights_prime in enumerate(weights_prime_list):
-        print(f"current {i} is {len(weights_prime)}")
+    weights_prime_list = sorted(weights_prime_list, key= lambda i: i[0])
     weights_prime = list(itertools.chain.from_iterable(weights_prime_list))
     return weights_prime
 
@@ -79,9 +67,9 @@ class FedCustom(fl.server.strategy.Strategy):
         self,
         fraction_fit: float = 1.0,
         fraction_evaluate: float = 1.0,
-        min_fit_clients: int = 3,
-        min_evaluate_clients: int = 3,
-        min_available_clients: int = 3,
+        min_fit_clients: int = 6,
+        min_evaluate_clients: int = 6,
+        min_available_clients: int = 6,
         evaluate_metrics_aggregation_fn: Optional[MetricsAggregationFn] = None,
     ) -> None:
         super().__init__()
@@ -101,13 +89,52 @@ class FedCustom(fl.server.strategy.Strategy):
         """Initialize global model parameters."""
         global model1_layers
         global model2_layers
-        model1 = MHBAMixerModule(**model_config, model_name="MHBAMixer")
-        model2 = MHBAMixerModule(**model_config, model_name="DWTMixer")
+        global model3_layers
+        # vocab_size, n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
+        #                  dilation: int, padding: int, num_mixers: int, num_classes:
+        model1 = MHBAMixerModule(model_flag=model_conf.model_flag[0],
+                                 vocab_size=model_conf.vocab_size,
+                                 n_heads=model_conf.n_heads,
+                                 max_seq_len=model_conf.max_seq_len,
+                                 hidden_dim=model_conf.hidden_dim,
+                                 index=model_conf.index,
+                                 kernel_size=model_conf.kernel_size,
+                                 dilation=model_conf.dilation,
+                                 padding=model_conf.padding,
+                                 num_mixers=model_conf.num_mixers,
+                                 num_classes=model_conf.num_classes,
+                                 model_name="MHBAMixer")
+        model2 = MHBAMixerModule(model_flag=model_conf.model_flag[1],
+                                 vocab_size=model_conf.vocab_size,
+                                 n_heads=model_conf.n_heads,
+                                 max_seq_len=model_conf.max_seq_len,
+                                 hidden_dim=model_conf.hidden_dim,
+                                 index=model_conf.index,
+                                 kernel_size=model_conf.kernel_size,
+                                 dilation=model_conf.dilation,
+                                 padding=model_conf.padding,
+                                 num_mixers=model_conf.num_mixers,
+                                 num_classes=model_conf.num_classes,
+                                 model_name="DWTMixer")
+        model3 = MHBAMixerModule(model_flag=model_conf.model_flag[2],
+                                 vocab_size=model_conf.vocab_size,
+                                 n_heads=model_conf.n_heads,
+                                 max_seq_len=model_conf.max_seq_len,
+                                 hidden_dim=model_conf.hidden_dim,
+                                 index=model_conf.index,
+                                 kernel_size=model_conf.kernel_size,
+                                 dilation=model_conf.dilation,
+                                 padding=model_conf.padding,
+                                 num_mixers=model_conf.num_mixers,
+                                 num_classes=model_conf.num_classes,
+                                 model_name="TSMixer")
         ndarrays_1 = _get_parameters(model1)
         ndarrays_2 = _get_parameters(model2)
-        merge_ndarrays = ndarrays_1+ndarrays_2
+        ndarrays_3 = _get_parameters(model3)
+        merge_ndarrays = ndarrays_1+ndarrays_2+ndarrays_3
         model1_layers = len(model1.state_dict().keys())
         model2_layers = len(model2.state_dict().keys())
+        model3_layers = len(model3.state_dict().keys())
         return fl.common.ndarrays_to_parameters(merge_ndarrays)
 
     def configure_fit(

@@ -2,6 +2,12 @@
 @Author W H Duan, X Y Liu, Y L Wang, H L Tang   
 @copyright (c) MiT 2023
 ## News
+### 2023/8/28 Version 0.5 TSMixer supporting!
+In this version, we added a new lightweight mixer model in this multi-heterogeneous fl framework.  
+All supporting models have been listed as follows:
+- MHBAMixer from Xiaoyan Liu  
+- DWTMixer from Yulin Wang
+- TSMixer from yulin Wang
 ### 2023/7/31 Version 0.4 Multi-Heterogeneous Clients supporting!  
 <font size="6" color="red">In this version, we settled the problem of loss value by revising the aggregate function.
 In Detail, the original aggregate function can not transfer parameters in order.</font>  

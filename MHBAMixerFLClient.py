@@ -14,9 +14,12 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from Moudules.Lightning_Data_Module import NLPDataModule, HuggingFaceDatasetImpl
 from Moudules.Lightning_MHBAMixer_Module import MHBAMixerModule
-from Moudules.Mixer import MixerLayer
-from torch import nn
 import flwr as fl
+from omegaconf import OmegaConf
+
+configs = OmegaConf.load("config.yml")
+dataset_conf, model_conf = configs.dataset, configs.model
+num_model1, num_model2, num_model3 = model_conf.num_models
 
 
 class MHBAMixerClient(NumPyClient): # 创建 MHBAMixer 模型的客户端
@@ -30,45 +33,27 @@ class MHBAMixerClient(NumPyClient): # 创建 MHBAMixer 模型的客户端
 
     def set_parameters(self, parameters: List[np.ndarray]):
         if self.model_name == "MHBAMixer":
-            _set_parameters(self.mixers, parameters[:39])
+            _set_parameters(self.mixers, parameters[:model_conf.num_layers[0]])
         if self.model_name == "DWTMixer":
-            _set_parameters(self.mixers, parameters[39:])
+            _set_parameters(self.mixers, parameters[model_conf.num_layers[0]:model_conf.num_layers[0]+model_conf.num_layers[1]])
+        if self.model_name == "TSMixer":
+            _set_parameters(self.mixers, parameters[model_conf.num_layers[0]+model_conf.num_layers[1]:])
 
     def fit(self, parameters, config):
-        cola_config = {
-            "filename": "glue",
-            "subset": "cola",
-            "filepath": None,
-            "label_map": [0, 1],
-            "batch_size": 10,
-            "num_workers": 4,
-            "feature1": "sentence",
-            "feature2": None,
-            "label": "label",
-            "max_length": 128
-        }
-        train_loader = DataLoader(HuggingFaceDatasetImpl(**cola_config, mode="train"), batch_size=64, shuffle=True)
-        val_loader = DataLoader(HuggingFaceDatasetImpl(**cola_config, mode='validation'),batch_size=64)
+
+        train_loader = DataLoader(HuggingFaceDatasetImpl(**dataset_conf, mode=dataset_conf.train),
+                                  batch_size=dataset_conf["batch_size"], shuffle=True)
+        val_loader = DataLoader(HuggingFaceDatasetImpl(**dataset_conf, mode=dataset_conf.validation),
+                                batch_size=dataset_conf["batch_size"])
         self.set_parameters(parameters)
         # 每10轮融合一次指标和模型参数
-        trainer = lightning.Trainer(max_epochs=10, accelerator="auto", devices="auto")
+        trainer = lightning.Trainer(max_epochs=1, accelerator="auto", devices="auto")
         trainer.fit(self.mixers, train_loader, val_loader)
         return self.get_parameters(config={}), len(train_loader), {}
 
     def evaluate(self, parameters, config):
-        cola_config = {
-            "filename": "glue",
-            "subset": "cola",
-            "filepath": None,
-            "label_map": [0, 1],
-            "batch_size": 10,
-            "num_workers": 4,
-            "feature1": "sentence",
-            "feature2": None,
-            "label": "label",
-            "max_length": 128
-        }
-        test_loader = DataLoader(HuggingFaceDatasetImpl(**cola_config, mode='validation'), batch_size=64)
+        test_loader = DataLoader(HuggingFaceDatasetImpl(**dataset_conf, mode=dataset_conf.test),
+                                 batch_size=dataset_conf["batch_size"])
         self.set_parameters(parameters)
 
         trainer = lightning.Trainer(accelerator="auto", devices="auto", log_every_n_steps=1)
@@ -102,24 +87,23 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--mixer', type=str, default="MHBAMixer")
     args = parser.parse_args()
-    model_config = {
-        "vocab_size": 30522,
-        "index": 7,
-        "hidden_dim": 64,
-        "kernel_size": [ 5, 3, 3, 3, 3, 3, 3, 7 ],
-        "dilation": [ 1, 1, 1, 1, 1, 1, 1, 1 ],
-        "padding": [ 2, 1, 1, 1, 1, 1, 1, 3 ],
-        "n_heads": 2,
-        "num_mixers": 2,
-        "max_seq_len": 128,
-        "num_classes": 2,
-        "model_name": args.mixer
-    }
     """
-    n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
-                 dilation: int, padding: int, num_mixers: int, num_classes: int
+    model_flag, vocab_size, n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
+                 dilation: int, padding: int, num_mixers: int, num_classes: int, model_name: str = "MHBAMixer", **kwargs
     """
-    model = MHBAMixerModule(**model_config)
+    mixer_map = {"MHBAMixer": 0, "DWTMixer": 1, "TSMixer": 2}
+    model = MHBAMixerModule(model_flag=mixer_map[args.mixer],
+                            vocab_size=model_conf.vocab_size,
+                            n_heads=model_conf.n_heads,
+                            max_seq_len=model_conf.max_seq_len,
+                            hidden_dim=model_conf.hidden_dim,
+                            index=model_conf.index,
+                            kernel_size=model_conf.kernel_size,
+                            dilation=model_conf.dilation,
+                            padding=model_conf.padding,
+                            num_mixers=model_conf.num_mixers,
+                            num_classes=model_conf.num_classes,
+                            model_name=args.mixer)
     # Flower client
     client = MHBAMixerClient(model, model_name=args.mixer)
     fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=client)

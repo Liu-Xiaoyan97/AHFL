@@ -13,6 +13,8 @@ from torchmetrics import Accuracy, F1Score, Recall, ROC
 
 from Moudules.DWT_Mixers import DWT_MIXER
 from Moudules.Mixer import MHBAMixer
+from Moudules.TSMixer import TS_Mixer
+
 
 def get_mixer_module(vocab_size, n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
                  dilation: int, padding: int, num_mixers: int, num_classes: int, model_name: str = "MHBAMixer"):
@@ -21,14 +23,17 @@ def get_mixer_module(vocab_size, n_heads, max_seq_len: int, hidden_dim: int, ind
                                 dilation, padding, num_mixers, num_classes)
     if model_name == "DWTMixer":
         return DWT_MIXER(vocab_size, num_mixers, max_seq_len, hidden_dim, hidden_dim, num_classes)
+    if model_name == "TSMixer":
+        return TS_Mixer(vocab_size, num_mixers, max_seq_len, hidden_dim, hidden_dim, num_classes)
 
 class MHBAMixerModule(LightningModule):
-    def __init__(self, vocab_size, n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
-                 dilation: int, padding: int, num_mixers: int, num_classes: int, model_name: str = "MHBAMixer"):
+    def __init__(self, model_flag, vocab_size, n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
+                 dilation: int, padding: int, num_mixers: int, num_classes: int, model_name: str = "MHBAMixer", **kwargs):
         super().__init__()
         """n_heads, max_seq_len: int, hidden_dim: int, index: int, kernel_size: int,
                          dilation: int, padding"""
         self.automatic_optimization = False
+        self.model_flag = nn.Parameter(torch.tensor(model_flag).float(), requires_grad=False)
         self.mixers = get_mixer_module(vocab_size, n_heads, max_seq_len, hidden_dim, index, kernel_size, dilation, padding,
                                  num_mixers, num_classes, model_name)
         # print(self.mixers)

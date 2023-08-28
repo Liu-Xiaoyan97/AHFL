@@ -83,7 +83,6 @@ class MHBA(nn.Module):
             """
     def __init__(self, n_head, mode, max_seq_len, embedding_dim, prob, kernel_size, dilation, padding):
         super(MHBA, self).__init__()
-        # print(max_seq_len, n_head)
         assert max_seq_len % n_head == 0, 'max_seq_len must be divisible by the n_head.'
         self.embedding_dim = embedding_dim
         self.n_head = n_head
